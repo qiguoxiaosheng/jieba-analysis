@@ -9,12 +9,8 @@ import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.nio.charset.Charset;
 import java.nio.charset.StandardCharsets;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.Locale;
-import java.util.Map;
+import java.util.*;
 import java.util.Map.Entry;
-import java.util.Set;
 
 
 public class WordDictionary {
@@ -23,10 +19,14 @@ public class WordDictionary {
     private static String USER_DICT_SUFFIX = ".dict";
 
     public final Map<String, Double> freqs = new HashMap<String, Double>();
+    public final Map<String, String> natures = new HashMap<String, String>();
     public final Set<String> loadedPath = new HashSet<String>();
     private Double minFreq = Double.MAX_VALUE;
     private Double total = 0.0;
     private DictSegment _dict;
+
+    // 词性.需要在词性识别之后才会有值,默认是空
+    private String nature = "";
 
 
     private WordDictionary() {
@@ -56,9 +56,10 @@ public class WordDictionary {
         String abspath = configFile.toAbsolutePath().toString();
         System.out.println("initialize user dictionary:" + abspath);
         synchronized (WordDictionary.class) {
-            if (loadedPath.contains(abspath))
+            if (loadedPath.contains(abspath)){
                 return;
-            
+            }
+
             DirectoryStream<Path> stream;
             try {
                 stream = Files.newDirectoryStream(configFile, String.format(Locale.getDefault(), "*%s", USER_DICT_SUFFIX));
@@ -113,14 +114,17 @@ public class WordDictionary {
                 String line = br.readLine();
                 String[] tokens = line.split("[\t ]+");
 
-                if (tokens.length < 2)
+                if (tokens.length < 2){
                     continue;
+                }
 
                 String word = tokens[0];
                 double freq = Double.valueOf(tokens[1]);
+                String nature = String.valueOf(tokens[2]);
                 total += freq;
                 word = addWord(word);
                 freqs.put(word, freq);
+                natures.put(word, nature);
             }
             // normalize
             for (Entry<String, Double> entry : freqs.entrySet()) {
@@ -135,8 +139,9 @@ public class WordDictionary {
         }
         finally {
             try {
-                if (null != is)
+                if (null != is) {
                     is.close();
+                }
             }
             catch (IOException e) {
                 System.err.println(String.format(Locale.getDefault(), "%s close failure!", MAIN_DICT));
@@ -151,8 +156,9 @@ public class WordDictionary {
             _dict.fillSegment(key.toCharArray());
             return key;
         }
-        else
+        else {
             return null;
+        }
     }
 
 
@@ -171,9 +177,9 @@ public class WordDictionary {
             int count = 0;
             while (br.ready()) {
                 String line = br.readLine();
-                String[] tokens = line.split("[\t ]+");
+                String[] tokens = line.split("[\t]+");
 
-                if (tokens.length < 1) {
+/*                if (tokens.length < 1) {
                     // Ignore empty line
                     continue;
                 }
@@ -185,9 +191,23 @@ public class WordDictionary {
                     freq = Double.valueOf(tokens[1]);
                 word = addWord(word); 
                 freqs.put(word, Math.log(freq / total));
+                count++;*/
+
+                if (tokens.length < 3){
+                    // Ignore empty line
+                    continue;
+                }
+
+                String word = tokens[0];
+                double freq = Double.valueOf(tokens[1]);
+                String nature = String.valueOf(tokens[2]);
+                word = addWord(word);
+                freqs.put(word, freq);
+                natures.put(word, nature);
+
                 count++;
             }
-            System.out.println(String.format(Locale.getDefault(), "user dict %s load finished, tot words:%d, time elapsed:%dms", userDict.toString(), count, System.currentTimeMillis() - s));
+            System.out.println(String.format(Locale.getDefault(), "user dict %s load finished, total words:%d, time elapsed:%dms", userDict.toString(), count, System.currentTimeMillis() - s));
             br.close();
         }
         catch (IOException e) {
@@ -204,20 +224,21 @@ public class WordDictionary {
             int count = 0;
             while (br.ready()) {
                 String line = br.readLine();
-                String[] tokens = line.split("[\t ]+");
+                String[] tokens = line.split("[\t]+");
 
-                if (tokens.length < 1) {
+                if (tokens.length < 3) {
                     // Ignore empty line
                     continue;
                 }
 
                 String word = tokens[0];
+                double freq = Double.valueOf(tokens[1]);
+                String nature = String.valueOf(tokens[2]);
 
-                double freq = 3.0d;
-                if (tokens.length == 2)
-                    freq = Double.valueOf(tokens[1]);
                 word = addWord(word);
                 freqs.put(word, Math.log(freq / total));
+                natures.put(word, nature);
+
                 count++;
             }
             System.out.println(String.format(Locale.getDefault(), "user dict %s load finished, tot words:%d, time elapsed:%dms", userDictPath, count, System.currentTimeMillis() - s));
@@ -227,7 +248,31 @@ public class WordDictionary {
             System.err.println(String.format(Locale.getDefault(), "%s: load user dict failure!", userDictPath));
         }
     }
-    
+
+
+    public void loadUserDict(List<String> userDictList) {
+        long s = System.currentTimeMillis();
+        int count = 0;
+        for(String userDict : userDictList){
+            String[] tokens = userDict.split("[\t]+");
+
+            if (tokens.length < 2){
+                // Ignore empty line
+                continue;
+            }
+
+            String word = tokens[0];
+            double freq = Double.valueOf(tokens[1]);
+            String nature = String.valueOf(tokens[2]);
+            word = addWord(word);
+            freqs.put(word, freq);
+            natures.put(word, nature);
+
+            count++;
+        }
+        System.out.println(String.format(Locale.getDefault(), "user dict load finished, total words:%d, time elapsed:%dms", count, System.currentTimeMillis() - s));
+    }
+
     public DictSegment getTrie() {
         return this._dict;
     }
@@ -237,11 +282,23 @@ public class WordDictionary {
         return freqs.containsKey(word);
     }
 
+    public boolean containsNature(String word) {
+        return natures.containsKey(word);
+    }
 
     public Double getFreq(String key) {
-        if (containsWord(key))
+        if (containsWord(key)) {
             return freqs.get(key);
-        else
+        } else {
             return minFreq;
+        }
+    }
+
+    public String getNature(String key) {
+        if (containsNature(key)) {
+            return natures.get(key);
+        } else {
+            return "";
+        }
     }
 }
