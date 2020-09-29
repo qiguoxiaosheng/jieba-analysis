@@ -93,7 +93,12 @@ public class WordDictionary {
             }
         }
     }
-    
+
+    public void init(List<String> userDictList) {
+        synchronized (WordDictionary.class) {
+            singleton.loadUserDict(userDictList);
+        }
+    }
     /**
      * let user just use their own dict instead of the default dict
      */

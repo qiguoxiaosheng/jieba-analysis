@@ -29,7 +29,10 @@ public class JiebaSegmenter {
 
     public void initUserDict(String[] paths) {
         wordDict.init(paths);
+    }
 
+    public void initUserDict(List<String> userDictList) {
+        wordDict.init(userDictList);
     }
 
     private Map<Integer, List<Integer>> createDAG(String sentence) {
